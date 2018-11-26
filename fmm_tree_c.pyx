@@ -1,8 +1,12 @@
 import numpy as np
-from copy import copy
 
+DTYPE = np.float64
+# ctypedef np.float64_t DTYPE_t
 
-class NodeData:
+cdef class NodeData:
+    cdef public double[:] num_list, xpos, zpos, gvals
+    cdef public int tpts
+    cdef public double dx, dz, xc, zc
     def __init__(self, num_list, xpos, zpos, gvals, tpts, dx, dz, xc, zc):
         self.num_list = num_list
         self.xpos = xpos
@@ -25,10 +29,14 @@ class NodeData:
         self.children = True
 
     def set_kvals(self, kvals):
-        self.kvals = copy(kvals)
+        self.kvals = kvals
 
 
-class TreeData:
+cdef class TreeData:
+    cdef public double[:] num_list, xpos, zpos, gvals
+    cdef public int pval, nvorts, ccnt, rcnt
+    cdef public double mx
+
     def __init__(self, xpos, zpos, gvals, pval, mx, nvorts, ccnt, rcnt):
         self.xpos = xpos
         self.zpos = zpos
