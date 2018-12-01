@@ -1,40 +1,40 @@
 import numpy as np
-from copy import copy
 
 
 class NodeData:
-    def __init__(self, num_list, xpos, zpos, gvals, tpts, dx, dz, xc, zc):
+    def __init__(self, num_list, xpos, zpos, gvals, tpts, pval, dx, dz, xc, zc):
         self.num_list = num_list
         self.xpos = xpos
         self.zpos = zpos
         self.gvals = gvals
         self.tpts = tpts
+        self.pval = pval
         self.dx = dx
         self.dz = dz
         self.children = False
 
         self.center = np.array([xc, zc])
         self.center.shape = (1, 2)
-        self.nodscnlst = []
-        self.xcfs = []
-        self.kcursf = []
-        self.kvals = np.array([])
-
+        self.nodscndlst = []
+        self.xcfs = np.empty(0, dtype=np.float64)
+        self.kcursf = np.empty(0, dtype=np.float64)
+        self.kvals = np.zeros((1, pval+1), dtype=np.float64)
 
     def has_children(self):
         self.children = True
 
     def set_kvals(self, kvals):
-        self.kvals = copy(kvals)
+        self.kvals = kvals
 
 
 class TreeData:
-    def __init__(self, xpos, zpos, gvals, pval, mx, nvorts, ccnt, rcnt):
+    def __init__(self, xpos, zpos, gvals, pval, mx, ep, nvorts, ccnt, rcnt):
         self.xpos = xpos
         self.zpos = zpos
         self.gvals = gvals
         self.pval = pval
         self.mx = mx
+        self.ep = ep
         self.nvorts = nvorts
 
         xmin = np.min(xpos)

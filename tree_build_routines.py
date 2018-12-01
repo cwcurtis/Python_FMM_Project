@@ -1,9 +1,10 @@
 import fmm_tree
 import numpy as np
+import numba
 
 
-def make_tree(xpos, zpos, gvals, pval, mx, nvorts, ccnt, rcnt):
-    ldata = fmm_tree.TreeData(xpos, zpos, gvals, pval, mx, nvorts, ccnt, rcnt)
+def make_tree(xpos, zpos, gvals, pval, mx, ep, nvorts, ccnt, rcnt):
+    ldata = fmm_tree.TreeData(xpos, zpos, gvals, pval, mx, ep, nvorts, ccnt, rcnt)
     tnodes = fmm_tree.Tree(ldata)
     return tnodes
 
@@ -22,9 +23,9 @@ def build_tree(tnodes):
         col = np.mod(jj, 2)
         row = (jj-col)/2
         xl = xmin + col*dx
-        xr = xmin + (col+1)*dx
+        xr = xl + dx
         zt = zmax - row*dz
-        zb = zmax - (row+1)*dz
+        zb = zt - dz
 
         indsl = (xpos >= xl)*(xpos < xr)*(zpos <= zt)*(zpos > zb)
         num_list = tnodes.my_dat.glb_inds[indsl]
@@ -34,7 +35,7 @@ def build_tree(tnodes):
         zloc = tnodes.my_dat.zpos[indsl]
         gloc = tnodes.my_dat.gvals[indsl]
         tpts = np.sum(indsl)
-        ldata = fmm_tree.NodeData(list(num_list), xloc, zloc, gloc, tpts, dx, dz, xc, zc)
+        ldata = fmm_tree.NodeData(list(num_list), xloc, zloc, gloc, tpts, tnodes.my_dat.pval, dx, dz, xc, zc)
 
         if tpts > mlvl:
             ldata.has_children()
@@ -46,9 +47,9 @@ def build_tree(tnodes):
                 ncol = np.mod(kk, 2)
                 nrow = (kk-ncol)/2
                 xnl = xl + ncol*dnx
-                xnr = xl + (ncol+1)*dnx
+                xnr = xnl + dnx
                 znt = zt - nrow*dnz
-                znb = zt - (nrow+1)*dnz
+                znb = znt - dnz
                 new_node = node_builder(tnodes, xnl, xnr, znb, znt, num_list)
                 tnodes.nodes[jj].add_child(new_node)
         else:
@@ -69,7 +70,7 @@ def node_builder(tnodes, xl, xr, zb, zt, pinds):
     zloc = tnodes.my_dat.zpos[num_list]
     gloc = tnodes.my_dat.gvals[num_list]
     tpts = xloc.size
-    ldata = fmm_tree.NodeData(list(num_list), xloc, zloc, gloc, tpts, dx, dz, xc, zc)
+    ldata = fmm_tree.NodeData(list(num_list), xloc, zloc, gloc, tpts, tnodes.my_dat.pval, dx, dz, xc, zc)
 
     if tpts > 0:
         kvals = far_panel_comp(xloc, zloc, gloc, xc, zc, tnodes.my_dat.pval, tnodes.my_dat.mx)
@@ -84,9 +85,9 @@ def node_builder(tnodes, xl, xr, zb, zt, pinds):
             ncol = np.mod(kk, 2)
             nrow = (kk - ncol) / 2
             xnl = xl + ncol * dnx
-            xnr = xl + (ncol + 1) * dnx
+            xnr = xnl + dnx
             znt = zt - nrow * dnz
-            znb = zt - (nrow + 1) * dnz
+            znb = znt - dnz
             new_node = node_builder(tnodes, xnl, xnr, znb, znt, num_list)
             lnode.add_child(new_node)
     else:
@@ -94,11 +95,11 @@ def node_builder(tnodes, xl, xr, zb, zt, pinds):
     return lnode
 
 
+@numba.jit
 def far_panel_comp(xfar, zfar, gfar, xc, zc, pval, mx):
     zcf = np.tan(np.pi/(2.*mx)*((xc-xfar) + 1j*(zc-zfar)))
     nparts = zcf.size
     zmat = np.ones((nparts, pval+2), dtype=np.complex128)
-    gfar.shape = (nparts, 1)
-    for jj in xrange(2, pval+2):
+    for jj in xrange(1, pval+2):
         zmat[:, jj] = zmat[:, jj-1]*zcf
-    return np.squeeze(np.matmul(zmat.T, gfar))
+    return np.matmul(zmat.T, gfar)

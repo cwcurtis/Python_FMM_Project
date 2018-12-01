@@ -38,27 +38,28 @@ def cnctslc(redvals, indtst):
 
 
 def build_tree_lists(tnodes):
-    pval = tnodes.my_dat.pval
     lnodes = [tnodes.get_node(jj) for jj in xrange(4) if tnodes.get_node_dat(jj).tpts > 0]
+    ndcnt = 0
+    nmnodes = len(lnodes)
 
     for lnode in lnodes:
         dscntlst = []
         ndscndlst = []
-        cinds = range(0, jj)+range(jj+1, 4)
-        cnodes = [tnodes.get_node(cind) for cind in cinds if tnodes.get_node_dat(cind).tpts > 0]
-        for cnode in cnodes:
-            if cnode.my_dat.children:
-                dscntlst.append(cnode)
+        cinds = range(0, ndcnt)+range(ndcnt+1, nmnodes)
+        for cind in cinds:
+            if lnodes[cind].my_dat.children:
+                dscntlst.append(lnodes[cind])
             else:
-                ndscndlst += cnode.my_dat.num_list
+                ndscndlst += lnodes[cind].my_dat.num_list
 
         if lnode.my_dat.children:
-            build_node_lists(lnode, dscntlst, ndscndlst, pval)
+            build_node_lists(lnode, dscntlst, ndscndlst)
         else:
-            lnode.my_dat.nodscndlst = ndscndlst
+            lnode.my_dat.nodscndlst = ndscndlst[:]
+        ndcnt += 1
 
 
-def build_node_lists(lnode, inlst, ndscndlst, pval):
+def build_node_lists(lnode, inlst, ndscndlst):
     dx = lnode.children[0].my_dat.dx
     dz = lnode.children[0].my_dat.dz
     ctf = dx ** 2. + dz ** 2.
@@ -66,9 +67,10 @@ def build_node_lists(lnode, inlst, ndscndlst, pval):
     nterms = len(inlst)
     xccs = np.squeeze(np.array([lnode.get_child_dat(jj).center for jj in xrange(4)]))
     lchildinds = [jj for jj in xrange(4) if lnode.get_child_dat(jj).tpts > 0]
-    lchildren = [lnode.get_child(jj) for jj in xrange(4) if lnode.get_child_dat(jj).tpts > 0]
+    lchildren = [lnode.get_child(lchildind) for lchildind in lchildinds]
     lchldrnofchldrn = np.array([True if lchild.my_dat.children else False for lchild in lchildren], dtype=bool)
     lchildcnt = 0
+    nmkids = len(lchildinds)
 
     if nterms > 0:
 
@@ -84,7 +86,7 @@ def build_node_lists(lnode, inlst, ndscndlst, pval):
         lndscndlst = ndscndlst[:]
         dscntlst = []
         # Now we check over the siblings.
-        cinds = [lchildind for lchildind in lchildinds if lchildind != lchildinds[lchildcnt]]
+        cinds = range(0, lchildcnt) + range(lchildcnt + 1, nmkids)
         for cind in cinds:
             if lchldrnofchldrn[cind]:
                 dscntlst.append(lchildren[cind])
@@ -104,7 +106,7 @@ def build_node_lists(lnode, inlst, ndscndlst, pval):
             if any(myclose):
                 kidslst = np.logical_and(myclose, chldary)
                 kidsinds = itervals[kidslst]
-                nokidslst = np.logical_not(kidslst)
+                nokidslst = np.logical_and(myclose, np.logical_not(chldary))
                 if any(nokidslst):
                     nokidsinds = itervals[nokidslst]
                     flt = cnctslc(nokidsinds, indtst)
@@ -113,7 +115,7 @@ def build_node_lists(lnode, inlst, ndscndlst, pval):
         if lchild.my_dat.children:
             if any(kidslst):
                 dscntlst += [clnodes[ind] for ind in kidsinds]
-            build_node_lists(lchild, dscntlst, lndscndlst, pval)
+            build_node_lists(lchild, dscntlst, lndscndlst)
         else:
-            lchild.nodscndlst = lndscndlst
+            lchild.my_dat.nodscndlst = lndscndlst[:]
         lchildcnt += 1
