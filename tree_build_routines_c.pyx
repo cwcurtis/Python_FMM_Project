@@ -5,6 +5,12 @@ ctypedef double complex complex128_t
 
 from fmm_tree_c cimport TreeData
 from fmm_tree_c cimport NodeData
+from cython.parallel import prange
+
+cdef double complex Ival = 1j
+
+cdef extern from "complex.h" nogil:
+    double complex ctan(double complex z)
 
 ########################################################################################################################
 # Helper Functions
@@ -130,9 +136,21 @@ def node_builder(TreeData tdat, double xl, double xr, double zb, double zt, doub
 @cython.wraparound(False)
 cdef double complex[:] far_panel_comp(double[:] xfar, double[:] zfar, double[:] gfar, double xc, double zc, int pval, double mx, int tpts):
 
-    zcf = np.tan(np.pi/(2.*mx)*((xc*np.ones(tpts)-xfar) + 1j*(zc*np.ones(tpts)-zfar)))
-    nparts = zcf.size
-    zmat = np.ones((nparts, pval+2), dtype=np.complex128)
-    for jj in xrange(1, pval+2):
-        zmat[:, jj] = zmat[:, jj-1]*zcf
-    return np.matmul(zmat.T, gfar)
+    cdef double complex[:] zret = np.empty(pval+2, dtype=np.complex128)
+    cdef double complex[:] zpow = np.ones(tpts, dtype=np.complex128)
+    cdef double complex[:] zcf = np.empty(tpts, dtype=np.complex128)
+    cdef double complex p2M = np.pi/(2.*mx)
+    cdef double complex tot
+    cdef Py_ssize_t kk, jj
+
+    for jj in xrange(0, tpts):
+        zcf[jj] = ctan(p2M*((xc-xfar[jj]) + Ival*(zc-zfar[jj])))
+
+    for jj in xrange(0, pval+2):
+        tot = 0.
+        for kk in prange(0, tpts, nogil=True):
+            tot += gfar[kk]*zpow[kk]
+            zpow[kk] *= zcf[kk]
+        zret[jj] = tot
+
+    return zret

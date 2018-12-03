@@ -26,7 +26,7 @@ def build_out(inlst, nterms):
 
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def alt_dcomp(int[:, :] dsts, double[:, :] centers, double[:, :] xccs, int indtmp, double ctf):
+def alt_dcomp(long[:, :] dsts, double[:, :] centers, double[:, :] xccs, int indtmp, double ctf):
     cdef Py_ssize_t kk, jj
     cdef double dif0, dif1, cdst
     for kk in xrange(4):
@@ -91,7 +91,7 @@ def build_node_lists(lnode, inlst, ndscndlst):
 
         [indtmp, clnodes, indtst, centers, kvsary, chldary] = build_out(inlst, nterms)
 
-        dsts = np.zeros((4, indtmp), dtype=np.intc)
+        dsts = np.zeros((4, indtmp), dtype=np.int)
         if indtmp == 1:
             dsts.shape = (4, indtmp)
         toofar = alt_dcomp(dsts, centers, xccs, indtmp, ctf)

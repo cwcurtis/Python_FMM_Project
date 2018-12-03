@@ -1,7 +1,7 @@
 import fmm_tree_c as fmm_tree
-cimport numpy as np
 import numpy as np
 cimport cython
+# cimport numpy as np
 
 from cython.parallel import prange
 from fmm_tree_c cimport TreeData
@@ -10,7 +10,8 @@ from libc.math cimport exp as cexp
 from libc.math cimport sin as csin
 from libc.math cimport cos as ccos
 
-ctypedef double complex complex128_t
+# ctypedef double complex complex128_t
+
 cdef double complex Ival = 1j
 cdef double complex One = 1.0 + 1j*0.
 cdef double complex Two = 2.0 + 1j*0.

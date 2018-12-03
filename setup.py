@@ -3,31 +3,34 @@ from distutils.extension import Extension
 from Cython.Build import cythonize
 import numpy as np
 
+my_extra_compile_args = ['-fopenmp', '-ffast-math']
+my_extra_link_args = ['-fopenmp']
+
 ext_modules = [
     Extension(
         "fmm_tree_c",
         sources=["fmm_tree_c.pyx"],
-        extra_compile_args=["-g"],
-        extra_link_args=["-g"]
+        extra_compile_args=my_extra_compile_args,
+        extra_link_args=my_extra_link_args
     ),
     Extension(
         "tree_build_routines_c",
         sources=["tree_build_routines_c.pyx"],
-        extra_compile_args=["-g"],
-        extra_link_args=["-g"]
+        extra_compile_args=my_extra_compile_args,
+        extra_link_args=my_extra_link_args
     ),
     Extension(
         "list_build_routines_c",
         sources=["list_build_routines_c.pyx"],
-        extra_compile_args=["-g"],
-        extra_link_args=["-g"]
+        extra_compile_args=my_extra_compile_args,
+        extra_link_args=my_extra_link_args
     ),
     Extension(
         "tree_compute_routines_c",
         sources=["tree_compute_routines_c.pyx"],
         libraries=["m"],
-        extra_compile_args=['-fopenmp', '-ffast-math', '-g'],
-        extra_link_args=['-fopenmp', '-g']
+        extra_compile_args=my_extra_compile_args,
+        extra_link_args=my_extra_link_args
     )
 ]
 
