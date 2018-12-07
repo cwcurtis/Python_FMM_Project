@@ -1,124 +1,250 @@
 import numpy as np
+cimport numpy as np
+cimport cython
 
-DTYPE = np.float64
-# ctypedef np.float64_t DTYPE_t
+DTYPE = np.intc
 
 cdef class NodeData:
-    def __init__(self, num_list, xpos, zpos, gvals, tpts, pval, dx, dz, xc, zc):
+    def __cinit__(self, int[:] num_list, double[:] xpos, double[:] zpos, double[:] gvals, int tpts, double dx, double dz, double xc, double zc):
         self.num_list = num_list
-        self.xpos = xpos
-        self.zpos = zpos
-        self.gvals = gvals
-        self.tpts = tpts
-        self.pval = pval
-        self.dx = dx
-        self.dz = dz
-        self.children = 0
+        self.ndxpos = xpos
+        self.ndzpos = zpos
+        self.ndgvals = gvals
+        self.ndtpts = tpts
+        self.nddx = dx
+        self.nddz = dz
+        self.hschldrn = 0
+        self.ndfpts = 0
 
-        self.center = np.array([xc, zc])
-        self.center.shape = (1, 2)
-        self.nodscndlst = []
-        self.xcfs = np.empty(0, dtype=np.float64)
-        self.kcursf = np.empty(0, dtype=np.float64)
-        self.kvals = np.empty((1, pval+2), dtype=np.float64)
+        self.ndcenter = np.empty(2, dtype=np.float64)
+        self.ndcenter[0] = xc
+        self.ndcenter[1] = zc
+        self.ndnodscndlst = np.empty(0, dtype=DTYPE)
+        self.ndxcfs = np.empty(2, dtype=np.float64).reshape(1,2)
+        self.ndkcursf = np.empty((1, 1), dtype=np.complex128)
+        self.ndkvals = np.empty(0, dtype=np.complex128)
 
-    cpdef void has_children(self):
-        self.children = 1
+cdef class NodeList:
 
-    cpdef void set_kvals(self, kvals):
-        self.kvals = kvals
+    def __init__(self):
+        self.nodes = []
+        self.ind = 0
 
+    def __iadd__(self, Node x):
+        self.nodes.append(x)
+        return self
 
-cdef class TreeData:
-    def __init__(self, xpos, zpos, gvals, pval, mx, ep, nvorts, ccnt, rcnt):
-        self.xpos = xpos
-        self.zpos = zpos
-        self.gvals = gvals
-        self.pval = pval
-        self.mx = mx
-        self.ep = ep
-        self.nvorts = nvorts
+    def __getitem__(self,ind):
+        return self.nodes[ind]
 
-        xmin = np.min(xpos)
-        xmax = np.max(xpos)
-        zmin = np.min(zpos)
-        zmax = np.max(zpos)
+    def __len__(self):
+        return len(self.nodes)
 
-        mlvl = np.int(np.floor(np.log(nvorts) / np.log(4)))
-        xmin = xmin * (1. - np.sign(xmin) * .005)
-        xmax = xmax * (1. + np.sign(xmax) * .005)
-        zmin = zmin * (1. - np.sign(zmin) * .005)
-        zmax = zmax * (1. + np.sign(zmax) * .005)
+    def __iter__(self):
+        return self
 
-        self.xmin = xmin
-        self.xmax = xmax
-        self.zmin = zmin
-        self.zmax = zmax
-        self.mlvl = mlvl
-        self.ccnt = ccnt
-        self.rcnt = rcnt
-        self.dx = (xmax - xmin) / ccnt
-        self.dz = (zmax - zmin) / rcnt
+    def __next__(self):
+        if self.ind >= len(self):
+            raise StopIteration()
+        ret = self.nodes[self.ind]
+        self.ind += 1
+        return ret
 
-    cdef double[:] xslice(self, long[:] inds, int npts):
+cdef class Node(NodeList):
+
+    def __init__(self, NodeData loc_dat):
+        self.children = NodeList()
+        self.my_dat = loc_dat
+
+    property node_dat:
+        def __get__(self):
+            return self.my_dat
+
+    property xpos:
+        def __get__(self):
+            return self.my_dat.ndxpos
+
+    property zpos:
+        def __get__(self):
+            return self.my_dat.ndzpos
+
+    property gvals:
+        def __get__(self):
+            return self.my_dat.ndgvals
+
+    property kvals:
+        def __get__(self):
+            return self.my_dat.ndkvals
+
+        def __set__(self, ivec):
+            self.my_dat.ndkvals = ivec
+
+    property tpts:
+        def __get__(self):
+            return self.my_dat.ndtpts
+
+    property dx:
+        def __get__(self):
+            return self.my_dat.nddx
+
+    property dz:
+        def __get__(self):
+            return self.my_dat.nddz
+
+    property myinds:
+        def __get__(self):
+            return self.my_dat.num_list
+
+    property nodscndlst:
+        def __set__(self, inlst):
+            self.my_dat.ndnodscndlst = inlst
+
+        def __get__(self):
+            return self.my_dat.ndnodscndlst
+
+    property fpts:
+        def __set__(self, ipts):
+            self.my_dat.ndfpts = ipts
+
+        def __get__(self):
+            return self.my_dat.ndfpts
+
+    property kcursf:
+        def __set__(self, cmat):
+            self.my_dat.ndkcursf = cmat
+
+        def __get__(self):
+            return self.my_dat.ndkcursf
+
+    property xcfs:
+        def __set__(self, cmat):
+            self.my_dat.ndxcfs = cmat
+
+        def __get__(self):
+            return self.my_dat.ndxcfs
+
+    property parent:
+        def __get__(self):
+            return self.my_dat.hschldrn
+
+        def __set__(self, ival):
+            self.my_dat.hschldrn = ival
+
+    property center:
+        def __get__(self):
+            return self.my_dat.ndcenter
+
+    def __iter__(self):
+        return self
+
+    def __getitem__(self,index):
+        return self.children.nodes[index]
+
+    def __len__(self):
+        return len(self.children.nodes)
+
+    def __iadd__(self, Node x):
+        self.children += x
+        return self
+
+    def __next__(self):
+        if self.children.ind >= len(self):
+            raise StopIteration()
+        ret = self.children.nodes[self.children.ind]
+        self.ind += 1
+        return ret
+
+cdef class Tree(NodeList):
+
+    def __cinit__(self):
+        self.children = NodeList()
+
+    cpdef void set_glbdat(self, double[:] xpos, double[:] zpos, double[:] gvals, int pval, double mx, double ep, int nvorts):
+        self.tdglbxpos = xpos
+        self.tdglbzpos = zpos
+        self.tdglbgvals = gvals
+        self.tdpval = pval
+        self.tdmx = mx
+        self.tdep = ep
+        self.tdnvorts = nvorts
+
+    property pval:
+        def __get__(self):
+            return self.tdpval
+
+    property nvorts:
+        def __get__(self):
+            return self.tdnvorts
+
+    property mx:
+        def __get__(self):
+            return self.tdmx
+
+    property ep:
+        def __get__(self):
+            return self.tdep
+
+    property mlvl:
+        def __get__(self):
+            return self.tdmlvl
+
+    property glbxpos:
+        def __get__(self):
+            return self.tdglbxpos
+
+    property glbzpos:
+        def __get__(self):
+            return self.tdglbzpos
+
+    def __iter__(self):
+        return self
+
+    def __getitem__(self,index):
+        return self.children.nodes[index]
+
+    def __len__(self):
+        return len(self.children.nodes)
+
+    def __iadd__(self, Node x):
+        self.children += x
+        return self
+
+    def __next__(self):
+        if self.children.ind >= len(self):
+            raise StopIteration()
+        ret = self.children.nodes[self.children.ind]
+        self.ind += 1
+        return ret
+
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    cdef double[:] xslice(self, int[:] inds, int npts):
         cdef Py_ssize_t kk
         cdef double[:] xsub = np.empty(npts, dtype=np.float64)
         cdef int cnt = 0
-        for kk in xrange(npts):
-            xsub[cnt] = self.xpos[inds[kk]]
+        for kk in range(npts):
+            xsub[cnt] = self.tdglbxpos[inds[kk]]
             cnt += 1
         return xsub
 
-    cdef double[:] zslice(self, long[:] inds, int npts):
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    cdef double[:] zslice(self, int[:] inds, int npts):
         cdef Py_ssize_t kk
         cdef double[:] zsub = np.empty(npts, dtype=np.float64)
         cdef int cnt = 0
         for kk in xrange(npts):
-            zsub[cnt] = self.zpos[inds[kk]]
+            zsub[cnt] = self.tdglbzpos[inds[kk]]
             cnt += 1
         return zsub
 
-    cdef double[:] gslice(self, long[:] inds, int npts):
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
+    cdef double[:] gslice(self, int[:] inds, int npts):
         cdef Py_ssize_t kk
         cdef double[:] gsub = np.empty(npts, dtype=np.float64)
         cdef int cnt = 0
         for kk in xrange(npts):
-            gsub[cnt] = self.gvals[inds[kk]]
+            gsub[cnt] = self.tdglbgvals[inds[kk]]
             cnt += 1
         return gsub
-
-
-class Node:
-    def __init__(self, loc_dat):
-        self.children = []
-        self.my_dat = loc_dat
-
-    def add_child(self, other):
-        self.children.append(other)
-
-    def get_child(self, ind):
-        return self.children[ind]
-
-    def get_dat(self):
-        return self.my_dat
-
-    def get_child_dat(self, ind):
-        return self.children[ind].my_dat
-
-
-class Tree:
-    def __init__(self, loc_dat):
-        self.nodes = []
-        self.my_dat = loc_dat
-
-    def add_node(self, node):
-        self.nodes.append(node)
-
-    def get_node(self, ind):
-        return self.nodes[ind]
-
-    def get_dat(self):
-        return self.my_dat
-
-    def get_node_dat(self, ind):
-        return self.nodes[ind].my_dat

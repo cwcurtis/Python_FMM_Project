@@ -1,16 +1,18 @@
 import fmm_tree_c as fmm_tree
 import numpy as np
 cimport cython
-# cimport numpy as np
+cimport numpy as np
+ctypedef double complex complex128_t
+
+from fmm_tree_c cimport Tree
+from fmm_tree_c cimport Node
 
 from cython.parallel import prange
-from fmm_tree_c cimport TreeData
-from fmm_tree_c cimport NodeData
 from libc.math cimport exp as cexp
 from libc.math cimport sin as csin
 from libc.math cimport cos as ccos
 
-# ctypedef double complex complex128_t
+DTYPE = np.intc
 
 cdef double complex Ival = 1j
 cdef double complex One = 1.0 + 1j*0.
@@ -133,91 +135,88 @@ cdef double[:,:] near_neighbor_comp(double[:] xloc, double[:] zloc, double[:] xf
 # Tree-Traversing Functions
 ########################################################################################################################
 
-def multipole_comp(tnodes):
+cpdef double[:,:] multipole_comp(tnodes):
 
-    cdef TreeData tdat
-    cdef NodeData ldat
+    cdef Node lnode
     cdef double[:] xloc, zloc, gloc, xlist, zlist, glist
-    cdef double[:,:] tvec, qt
-    cdef int nvorts, fpts, nnode, pval, nfar
-    cdef object iloc, nninds, xcfs, kcursf
-    cdef double mx, ep
+    cdef double[:,:] tvec, qt, xcfs
+    cdef int fpts, nfpts, nnode, nfar
+    cdef int[:] iloc
+    cdef int[:] nninds
+    cdef double complex[:,:] kcursf
+    cdef int pval = tnodes.pval
+    cdef int nvorts = tnodes.nvorts
+    cdef double mx = tnodes.mx
+    cdef double ep = tnodes.ep
 
-    tdat = tnodes.my_dat
-    nvorts = tdat.nvorts
-    mx = tdat.mx
-    ep = tdat.ep
-    pval = tdat.pval
     Kvec = np.empty((nvorts, 2), dtype=np.float64)
 
     for jj in xrange(4):
-        lnode = tnodes.get_node(jj)
-        ldat = lnode.my_dat
-        xloc = ldat.xpos
-        zloc = ldat.zpos
-        gloc = ldat.gvals
-        iloc = ldat.num_list
-        xcfs = ldat.xcfs
-        kcursf = ldat.kcursf
-        nnode = len(iloc)
+        lnode = tnodes[jj]
+        iloc = lnode.myinds
+        nnode = lnode.tpts
+        fpts = lnode.fpts
+        xloc = lnode.xpos
+        zloc = lnode.zpos
+        gloc = lnode.gvals
+        xcfs = lnode.xcfs
+        kcursf = lnode.kcursf
+
         qt = np.zeros((nnode, 2), dtype=np.float64)
 
-        if kcursf.size > 0:
-            nfar = kcursf[:, 0].size
-            qt = far_field_comp(xloc, zloc, xcfs, kcursf, mx, pval, nnode, nfar)
-        if ldat.children:
-            tvec = tree_comp(lnode, tdat, iloc)
+        if fpts > 0:
+            qt = far_field_comp(xloc, zloc, xcfs, kcursf, mx, pval, nnode, fpts)
+        if lnode.parent:
+            tvec = tree_comp(lnode, tnodes, iloc)
         else:
-            nninds = np.asarray(ldat.nodscndlst, dtype=np.int)
-            fpts = nninds.size
-            xlist = tdat.xslice(nninds, fpts)
-            zlist = tdat.zslice(nninds, fpts)
-            glist = tdat.gslice(nninds, fpts)
-            tvec = near_neighbor_comp(xloc, zloc, xlist, zlist, gloc, glist, mx, ep, nnode, fpts)
+            nninds = lnode.nodscndlst
+            nfpts = nninds.size
+            xlist = tnodes.xslice(nninds, nfpts)
+            zlist = tnodes.zslice(nninds, nfpts)
+            glist = tnodes.gslice(nninds, nfpts)
+            tvec = near_neighbor_comp(xloc, zloc, xlist, zlist, gloc, glist, mx, ep, nnode, nfpts)
         Kvec[iloc,:] = qt + np.asarray(tvec)
 
     return Kvec
 
 
-cdef double[:,:] tree_comp(lnodes, TreeData tdat, pinds):
-
-    cdef NodeData ldat
+cdef double[:,:] tree_comp(Node lnodes, Tree tnodes, int[:] pinds):
+    cdef Node lnode
     cdef double[:] xloc, zloc, gloc, xlist, zlist, glist
-    cdef double[:,:] tvec, qt
-    cdef int nvorts, fpts, nnode, pval, nfar
-    cdef object iloc, xcfs, kcursf
-    cdef double mx, ep
+    cdef double[:,:] tvec, qt, xcfs
+    cdef int fpts, nfpts, nnode, nfar
+    cdef int[:] iloc
+    cdef double complex[:, :] kcursf
+    cdef int pval = tnodes.pval
+    cdef int nvorts = tnodes.nvorts
+    cdef double mx = tnodes.mx
+    cdef double ep = tnodes.ep
 
-    nvorts = tdat.nvorts
-    mx = tdat.mx
-    ep = tdat.ep
-    pval = tdat.pval
     Kvec = np.empty((nvorts, 2), dtype=np.float64)
 
     for jj in xrange(4):
-        lnode = lnodes.get_child(jj)
-        ldat = lnode.my_dat
-        xloc = ldat.xpos
-        zloc = ldat.zpos
-        gloc = ldat.gvals
-        iloc = ldat.num_list
-        xcfs = ldat.xcfs
-        kcursf = ldat.kcursf
-        nnode = len(iloc)
+        lnode = lnodes[jj]
+        iloc = lnode.myinds
+        nnode = lnode.tpts
+        fpts = lnode.fpts
+        xloc = lnode.xpos
+        zloc = lnode.zpos
+        gloc = lnode.gvals
+        xcfs = lnode.xcfs
+        kcursf = lnode.kcursf
         qt = np.zeros((nnode, 2), dtype=np.float64)
 
-        if kcursf.size > 0:
-            nfar = kcursf[:, 0].size
-            qt = far_field_comp(xloc, zloc, xcfs, kcursf, mx, pval, nnode, nfar)
-        if ldat.children:
-            tvec = tree_comp(lnode, tdat, iloc)
+        if lnode.fpts > 0:
+            qt = far_field_comp(xloc, zloc, xcfs, kcursf, mx, pval, nnode, fpts)
+        if lnode.parent:
+            tvec = tree_comp(lnode, tnodes, iloc)
         else:
-            nninds = np.asarray(ldat.nodscndlst, dtype=np.int)
-            fpts = nninds.size
-            xlist = tdat.xslice(nninds, fpts)
-            zlist = tdat.zslice(nninds, fpts)
-            glist = tdat.gslice(nninds, fpts)
-            tvec = near_neighbor_comp(xloc, zloc, xlist, zlist, gloc, glist, mx, ep, nnode, fpts)
+            nninds = lnode.nodscndlst
+            nfpts = nninds.size
+            xlist = tnodes.xslice(nninds, nfpts)
+            zlist = tnodes.zslice(nninds, nfpts)
+            glist = tnodes.gslice(nninds, nfpts)
+            tvec = near_neighbor_comp(xloc, zloc, xlist, zlist, gloc, glist, mx, ep, nnode, nfpts)
         Kvec[iloc,:] = qt + np.asarray(tvec)
 
     return Kvec[pinds, :]

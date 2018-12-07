@@ -4,20 +4,32 @@ import numba
 
 
 def make_tree(xpos, zpos, gvals, pval, mx, ep, nvorts, ccnt, rcnt):
-    ldata = fmm_tree.TreeData(xpos, zpos, gvals, pval, mx, ep, nvorts, ccnt, rcnt)
-    tnodes = fmm_tree.Tree(ldata)
+    ldata = fmm_tree.TreeData()
+    ldata.xpos = xpos
+    ldata.zpos = zpos
+    ldata.gvals = gvals
+    ldata.pval = pval
+    ldata.mx = mx
+    ldata.ep = ep
+    ldata.nvorts = nvorts
+    ldata.ccnt = ccnt
+    ldata.rcnt = rcnt
+    ldata.define_bounds()
+
+    tnodes = fmm_tree.Tree()
+    tnodes.my_dat = ldata
     return tnodes
 
 
 def build_tree(tnodes):
 
-    dx = tnodes.my_dat.dx
-    dz = tnodes.my_dat.dz
-    xmin = tnodes.my_dat.xmin
-    zmax = tnodes.my_dat.zmax
-    xpos = tnodes.my_dat.xpos
-    zpos = tnodes.my_dat.zpos
-    mlvl = tnodes.my_dat.mlvl
+    dx = tnodes.dx
+    dz = tnodes.dz
+    xmin = tnodes.xmin
+    zmax = tnodes.zmax
+    xpos = tnodes.xpos
+    zpos = tnodes.zpos
+    mlvl = tnodes.mlvl
 
     for jj in xrange(4):
         col = np.mod(jj, 2)
@@ -27,20 +39,19 @@ def build_tree(tnodes):
         zt = zmax - row*dz
         zb = zt - dz
 
-        indsl = (xpos >= xl)*(xpos < xr)*(zpos <= zt)*(zpos > zb)
-        num_list = tnodes.my_dat.glb_inds[indsl]
+        num_list = tnodes.glb_inds[(xpos >= xl)*(xpos < xr)*(zpos <= zt)*(zpos > zb)]
         xc = (xl+xr)/2.
         zc = (zb+zt)/2.
-        xloc = tnodes.my_dat.xpos[indsl]
-        zloc = tnodes.my_dat.zpos[indsl]
-        gloc = tnodes.my_dat.gvals[indsl]
-        tpts = np.sum(indsl)
-        ldata = fmm_tree.NodeData(list(num_list), xloc, zloc, gloc, tpts, tnodes.my_dat.pval, dx, dz, xc, zc)
+        xloc = tnodes.xpos[num_list]
+        zloc = tnodes.zpos[num_list]
+        gloc = tnodes.gvals[num_list]
+        tpts = num_list.size
+        ldata = fmm_tree.NodeData()
+        ldata.vec_set(list(num_list), xloc, zloc, gloc, tpts, tnodes.pval, dx, dz, xc, zc)
+        lnode = fmm_tree.Node()
 
         if tpts > mlvl:
-            ldata.has_children()
-            lnode = fmm_tree.Node(ldata)
-            tnodes.add_node(lnode)
+            ldata.hschldrn = True
             dnx = dx/2.
             dnz = dz/2.
             for kk in xrange(4):
@@ -50,35 +61,34 @@ def build_tree(tnodes):
                 xnr = xnl + dnx
                 znt = zt - nrow*dnz
                 znb = znt - dnz
-                new_node = node_builder(tnodes, xnl, xnr, znb, znt, num_list)
-                tnodes.nodes[jj].add_child(new_node)
-        else:
-            lnode = fmm_tree.Node(ldata)
-            tnodes.add_node(lnode)
+                new_child = node_builder(tnodes, xnl, xnr, znb, znt, num_list, xloc, zloc)
+                lnode += new_child
+
+        lnode.my_dat = ldata
+        tnodes += lnode
 
 
-def node_builder(tnodes, xl, xr, zb, zt, pinds):
+def node_builder(tnodes, xl, xr, zb, zt, pinds, xcur, zcur):
     dx = xr - xl
     dz = zt - zb
-    xcur = tnodes.my_dat.xpos[pinds]
-    zcur = tnodes.my_dat.zpos[pinds]
-    inds_in_cell = (xcur >= xl)*(xcur < xr)*(zcur <= zt)*(zcur > zb)
     xc = (xl+xr)/2.
     zc = (zb+zt)/2.
-    num_list = pinds[inds_in_cell]
-    xloc = tnodes.my_dat.xpos[num_list]
-    zloc = tnodes.my_dat.zpos[num_list]
-    gloc = tnodes.my_dat.gvals[num_list]
-    tpts = xloc.size
-    ldata = fmm_tree.NodeData(list(num_list), xloc, zloc, gloc, tpts, tnodes.my_dat.pval, dx, dz, xc, zc)
+    num_list = pinds[(xcur >= xl)*(xcur < xr)*(zcur <= zt)*(zcur > zb)]
+    xloc = tnodes.xpos[num_list]
+    zloc = tnodes.zpos[num_list]
+    gloc = tnodes.gvals[num_list]
+    tpts = num_list.size
+
+    ldata = fmm_tree.NodeData()
+    ldata.vec_set(list(num_list), xloc, zloc, gloc, tpts, tnodes.pval, dx, dz, xc, zc)
 
     if tpts > 0:
-        kvals = far_panel_comp(xloc, zloc, gloc, xc, zc, tnodes.my_dat.pval, tnodes.my_dat.mx)
-        ldata.set_kvals(kvals)
+        ldata.kvals = far_panel_comp(xloc, zloc, gloc, xc, zc, tnodes.pval, tnodes.mx)
 
-    if tpts > tnodes.my_dat.mlvl:
-        ldata.has_children()
-        lnode = fmm_tree.Node(ldata)
+    lnode = fmm_tree.Node()
+
+    if tpts > tnodes.mlvl:
+        ldata.hschldrn = True
         dnx = dx / 2.
         dnz = dz / 2.
         for kk in xrange(4):
@@ -88,10 +98,10 @@ def node_builder(tnodes, xl, xr, zb, zt, pinds):
             xnr = xnl + dnx
             znt = zt - nrow * dnz
             znb = znt - dnz
-            new_node = node_builder(tnodes, xnl, xnr, znb, znt, num_list)
-            lnode.add_child(new_node)
-    else:
-        lnode = fmm_tree.Node(ldata)
+            new_child = node_builder(tnodes, xnl, xnr, znb, znt, num_list, xloc, zloc)
+            lnode += new_child
+
+    lnode.my_dat = ldata
     return lnode
 
 

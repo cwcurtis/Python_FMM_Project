@@ -33,81 +33,6 @@ def far_field_comp(xloc, zloc, xcfs, kcurs, mx, pval, nnode, nfar):
     return qt
 
 
-def multipole_comp(tnodes):
-
-    tdat = tnodes.my_dat
-    nvorts = tdat.nvorts
-    mx = tdat.mx
-    ep = tdat.ep
-    pval = tdat.pval
-    Kvec = np.empty((nvorts, 2), dtype=np.float64)
-
-    for jj in xrange(4):
-        lnode = tnodes.get_node(jj)
-        ldat = lnode.my_dat
-        xloc = ldat.xpos
-        zloc = ldat.zpos
-        gloc = ldat.gvals
-        iloc = ldat.num_list
-        xcfs = ldat.xcfs
-        kcursf = ldat.kcursf
-        nnode = len(iloc)
-        qt = np.zeros((nnode, 2), dtype=np.float64)
-
-        if kcursf.size > 0:
-            nfar = kcursf[:, 0].size
-            qt = far_field_comp(xloc, zloc, xcfs, kcursf, mx, pval, nnode, nfar)
-        if ldat.children:
-            tvec = tree_comp(lnode, tdat, iloc)
-        else:
-            nninds = ldat.nodscndlst
-            fpts = len(nninds)
-            xlist = tdat.xpos[nninds]
-            zlist = tdat.zpos[nninds]
-            glist = tdat.gvals[nninds]
-            tvec = near_neighbor_comp(xloc, zloc, xlist, zlist, gloc, glist, mx, ep, nnode, fpts)
-        Kvec[iloc, :] = qt + tvec
-
-    return Kvec
-
-
-def tree_comp(lnodes, tdat, pinds):
-
-    nvorts = tdat.nvorts
-    mx = tdat.mx
-    ep = tdat.ep
-    pval = tdat.pval
-    Kvec = np.empty((nvorts, 2), dtype=np.float64)
-
-    for jj in xrange(4):
-        lnode = lnodes.get_child(jj)
-        ldat = lnode.my_dat
-        xloc = ldat.xpos
-        zloc = ldat.zpos
-        gloc = ldat.gvals
-        iloc = ldat.num_list
-        xcfs = ldat.xcfs
-        kcursf = ldat.kcursf
-        nnode = len(iloc)
-        qt = np.zeros((nnode, 2), dtype=np.float64)
-
-        if kcursf.size > 0:
-            nfar = kcursf[:, 0].size
-            qt = far_field_comp(xloc, zloc, xcfs, kcursf, mx, pval, nnode, nfar)
-        if ldat.children:
-            tvec = tree_comp(lnode, tdat, iloc)
-        else:
-            nninds = ldat.nodscndlst
-            fpts = len(nninds)
-            xlist = tdat.xpos[nninds]
-            zlist = tdat.zpos[nninds]
-            glist = tdat.gvals[nninds]
-            tvec = near_neighbor_comp(xloc, zloc, xlist, zlist, gloc, glist, mx, ep, nnode, fpts)
-        Kvec[iloc, :] = qt + tvec
-
-    return Kvec[pinds, :]
-
-
 @jit
 def near_neighbor_comp(xloc, zloc, xfar, zfar, gnear, gfar, mx, rval, npts, fpts):
 
@@ -171,3 +96,77 @@ def near_neighbor_comp(xloc, zloc, xfar, zfar, gnear, gfar, mx, rval, npts, fpts
         Kret[:, 1] += np.squeeze(np.real(Kvals2))
 
     return Kret
+
+
+def multipole_comp(tnodes):
+
+    nvorts = tnodes.nvorts
+    mx = tnodes.mx
+    ep = tnodes.ep
+    pval = tnodes.pval
+    Kvec = np.empty((nvorts, 2), dtype=np.float64)
+
+    for jj in xrange(4):
+        lnode = tnodes[jj]
+        xloc = lnode.xpos
+        zloc = lnode.zpos
+        gloc = lnode.gvals
+        iloc = lnode.num_list
+        xcfs = lnode.xcfs
+        kcursf = lnode.kcursf
+        nnode = len(iloc)
+        qt = np.zeros((nnode, 2), dtype=np.float64)
+
+        if kcursf.size > 0:
+            nfar = kcursf[:, 0].size
+            qt = far_field_comp(xloc, zloc, xcfs, kcursf, mx, pval, nnode, nfar)
+        if lnode.parent:
+            tvec = tree_comp(lnode, tnodes, iloc)
+        else:
+            nninds = lnode.nodscndlst
+            fpts = len(nninds)
+            xlist = tnodes.xpos[nninds]
+            zlist = tnodes.zpos[nninds]
+            glist = tnodes.gvals[nninds]
+            tvec = near_neighbor_comp(xloc, zloc, xlist, zlist, gloc, glist, mx, ep, nnode, fpts)
+        Kvec[iloc, :] = qt + tvec
+
+    return Kvec
+
+
+def tree_comp(lnodes, tnodes, pinds):
+
+    nvorts = tnodes.nvorts
+    mx = tnodes.mx
+    ep = tnodes.ep
+    pval = tnodes.pval
+    Kvec = np.empty((nvorts, 2), dtype=np.float64)
+
+    for jj in xrange(4):
+        lnode = lnodes[jj]
+        xloc = lnode.xpos
+        zloc = lnode.zpos
+        gloc = lnode.gvals
+        iloc = lnode.num_list
+        xcfs = lnode.xcfs
+        kcursf = lnode.kcursf
+        nnode = len(iloc)
+        qt = np.zeros((nnode, 2), dtype=np.float64)
+
+        if kcursf.size > 0:
+            nfar = kcursf[:, 0].size
+            qt = far_field_comp(xloc, zloc, xcfs, kcursf, mx, pval, nnode, nfar)
+        if lnode.parent:
+            tvec = tree_comp(lnode, tnodes, iloc)
+        else:
+            nninds = lnode.nodscndlst
+            fpts = len(nninds)
+            xlist = tnodes.xpos[nninds]
+            zlist = tnodes.zpos[nninds]
+            glist = tnodes.gvals[nninds]
+            tvec = near_neighbor_comp(xloc, zloc, xlist, zlist, gloc, glist, mx, ep, nnode, fpts)
+        Kvec[iloc, :] = qt + tvec
+
+    return Kvec[pinds, :]
+
+

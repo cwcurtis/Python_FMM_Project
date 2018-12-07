@@ -1,15 +1,29 @@
 cdef class NodeData:
-    cdef public double[:] xpos, zpos, gvals
-    cdef public int tpts, children, pval
-    cdef public double dx, dz, xc, zc
-    cdef public object  num_list, center, nodscndlst, xcfs, kcursf, kvals
-    cpdef void has_children(self)
-    cpdef void set_kvals(self, kvals)
+    cdef int ndtpts, hschldrn, ndfpts
+    cdef int[:] ndnodscndlst
+    cdef int[:] num_list
+    cdef double[:] ndxpos, ndzpos, ndgvals, ndcenter
+    cdef double complex[:] ndkvals
+    cdef double nddx, nddz
+    cdef double[:,:] ndxcfs
+    cdef double complex[:,:] ndkcursf
 
-cdef class TreeData:
-    cdef public double[:] xpos, zpos, gvals
-    cdef public int pval, nvorts, ccnt, rcnt, mlvl
-    cdef public double mx, xmin, xmax, zmin, zmax, dx, dz, ep
-    cdef double[:] xslice(self, long[:] inds, int npts)
-    cdef double[:] zslice(self, long[:] inds, int npts)
-    cdef double[:] gslice(self, long[:] inds, int npts)
+cdef class NodeList:
+    cdef list nodes
+    cdef int ind
+
+cdef class Node(NodeList):
+    cdef NodeData my_dat
+    cdef NodeList children
+
+cdef class Tree(NodeList):
+    cdef double[:] tdglbxpos, tdglbzpos, tdglbgvals
+    cdef int tdpval, tdnvorts, tdmlvl
+    cdef double tdmx, tdep
+    cdef NodeList children
+
+    cpdef void set_glbdat(self, double[:] xpos, double[:] zpos, double[:] gvals, int pval, double mx, double ep, int nvorts)
+
+    cdef double[:] xslice(self, int[:] inds, int npts)
+    cdef double[:] zslice(self, int[:] inds, int npts)
+    cdef double[:] gslice(self, int[:] inds, int npts)
